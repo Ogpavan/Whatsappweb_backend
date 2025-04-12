@@ -1,23 +1,30 @@
 const { clients } = require('../services/whatsappService');
 
 exports.sendPublicMessage = async (req, res) => {
-  const { number, type, message, instance_id, access_token } = req.query;
+  const { number, type, message, instance_id, access_token } = req.body;
 
-  if (!number || !message || !instance_id || !access_token) {
-    return res.status(400).json({ status: 'error', message: 'Missing params' });
+  // Basic validations
+  if (!number || !type || !message || !instance_id || !access_token) {
+    return res.status(400).json({ success: false, error: 'Missing required fields' });
   }
 
+  // Optional: validate access_token here (e.g., match with env or DB)
+
   const client = clients[instance_id];
-  if (!client) return res.status(404).json({ status: 'error', message: 'Instance not ready' });
+  if (!client) {
+    return res.status(404).json({ success: false, error: 'Invalid instance ID or not connected' });
+  }
 
   try {
     if (type === 'text') {
       await client.sendMessage(`${number}@c.us`, message);
-      res.json({ status: 'success' });
     } else {
-      res.status(400).json({ status: 'error', message: 'Unsupported type' });
+      return res.status(400).json({ success: false, error: 'Unsupported message type' });
     }
+
+    return res.json({ success: true, message: 'Message sent successfully' });
   } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+    console.error(`❌ Error sending message: ${err.message}`);
+    return res.status(500).json({ success: false, error: 'Failed to send message' });
   }
 };

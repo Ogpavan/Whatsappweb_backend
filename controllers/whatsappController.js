@@ -16,10 +16,29 @@ exports.generateQRCode = async (req, res) => {
 
 exports.getUserDetails = (req, res) => {
   const { sessionId } = req.params;
-  const details = userDetails[sessionId];
+  let details = userDetails[sessionId];
+
+  if (!details) {
+    const client = clients[sessionId];
+    if (client && client.info) {
+      const { wid, pushname } = client.info;
+      details = {
+        phoneNumber: wid.user,
+        name: pushname || 'Unknown',
+        serialized: wid._serialized
+      };
+
+      // Optionally cache it for future
+      userDetails[sessionId] = details;
+    }
+  }
+
   if (!details) return res.status(404).json({ error: 'Not found' });
+
   res.json(details);
 };
+
+
 
 exports.sendMessage = async (req, res) => {
   const { sessionId, phoneNumber, message } = req.body;
