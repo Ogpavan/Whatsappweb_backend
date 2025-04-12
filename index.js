@@ -14,6 +14,10 @@ app.use(express.json());
 
 connectToMongoDB();
 
+app.get('/', (req, res) => {
+  res.send('Hello, World!');
+});
+
 app.use('/', sessionRoutes);
 app.use('/', whatsappRoutes);
 app.use('/api', apiRoutes);
