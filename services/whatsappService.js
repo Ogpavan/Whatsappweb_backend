@@ -1,19 +1,20 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const Session = require('../models/Session');
-const axios = require('axios');
+const { Client, LocalAuth } = require('whatsapp-web.js'); // ✅ Include LocalAuth
+const path = require('path');
 
 const clients = {};
 const qrCodes = {};
 const userDetails = {};
 
-// Init a new or existing session
 const initClient = (sessionId) => {
   return new Promise((resolve, reject) => {
     if (clients[sessionId]) return reject('Client already initialized');
 
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId: sessionId }),
-      puppeteer: { headless: true, args: ['--no-sandbox'] }
+      authStrategy: new LocalAuth({
+        clientId: sessionId, // ✅ Enables unique auth per session
+        dataPath: path.join(__dirname, '..', '.wwebjs_auth'), // optional but recommended
+      }),
+      puppeteer: { headless: true, args: ['--no-sandbox'] },
     });
 
     clients[sessionId] = client;
@@ -24,11 +25,11 @@ const initClient = (sessionId) => {
       qrCodes[sessionId] = qr;
       if (!qrResolved) {
         qrResolved = true;
-        resolve(qr); // Resolve with QR for frontend to display
+        resolve(qr);
       }
     });
 
-    client.on('ready', async () => {
+    client.on('ready', () => {
       const { wid, pushname } = client.info;
       const phoneNumber = wid.user;
       const name = pushname || 'Unknown';
@@ -36,49 +37,22 @@ const initClient = (sessionId) => {
 
       userDetails[sessionId] = { phoneNumber, name, serialized };
 
-      try {
-        await Session.findOneAndUpdate(
-          { sessionId },
-          { number: phoneNumber, name, serializedId: serialized },
-          { new: true }
-        );
-
-        // Optional: Notify external service
-        const apiUrl = 'http://localhost:3000/api/Whatsapp/RegisterUser';
-        await axios.post(apiUrl, { phoneNumber, name, serialized });
-      } catch (err) {
-        console.error('Error saving session or registering:', err.message);
-      }
-
+      console.log(`✅ WhatsApp client ready for ${sessionId}`);
       if (!qrResolved) {
         qrResolved = true;
-        resolve(null); // Already logged in, no QR required
+        resolve(null); // Already authenticated
       }
-
-      console.log(`✅ WhatsApp client ready for ${sessionId}`);
     });
 
-    client.on('disconnected', async () => {
+    client.on('disconnected', () => {
       console.log(`⚡ Client ${sessionId} disconnected`);
-    
-      // Clean from memory
       delete clients[sessionId];
       delete qrCodes[sessionId];
       delete userDetails[sessionId];
-    
-      // Clean from MongoDB (optional)
-      try {
-        await Session.findOneAndDelete({ sessionId });
-        console.log(`🗑️ Session ${sessionId} removed from DB`);
-      } catch (err) {
-        console.error(`❌ Failed to delete session ${sessionId} from DB:`, err.message);
-      }
     });
-    
 
     client.initialize();
 
-    // Timeout for safety
     setTimeout(() => {
       if (!qrResolved) {
         qrResolved = true;
@@ -88,25 +62,9 @@ const initClient = (sessionId) => {
   });
 };
 
-// Restore previously logged-in clients (called on server start)
-const restoreSessions = async () => {
-  const activeSessions = await Session.find({ serializedId: { $exists: true } });
-
-  for (const session of activeSessions) {
-    const { sessionId } = session;
-    try {
-      await initClient(sessionId);
-      console.log(`♻️ Restored WhatsApp client for session: ${sessionId}`);
-    } catch (err) {
-      console.error(`⚠️ Failed to restore session ${sessionId}:`, err);
-    }
-  }
-};
-
 module.exports = {
   clients,
   qrCodes,
   userDetails,
   initClient,
-  restoreSessions,
 };

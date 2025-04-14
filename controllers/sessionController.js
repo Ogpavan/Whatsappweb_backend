@@ -1,14 +1,15 @@
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
-const Session = require('../models/Session');
+
+// No Session import needed anymore
+// const Session = require('../models/Session');
 
 exports.createSession = async (req, res) => {
   const sessionId = uuidv4();
   const accessToken = crypto.randomBytes(16).toString('hex');
 
   try {
-    const session = new Session({ sessionId, accessToken });
-    await session.save();
+    // Just return the session ID and access token without saving to DB
     res.json({ sessionId, accessToken });
   } catch (err) {
     console.error('Error creating session:', err);
